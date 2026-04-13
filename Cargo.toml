@@ -1,0 +1,7 @@
+[package]
+name = "omni-tools"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+smallvec = "2.0.0-alpha.12"
