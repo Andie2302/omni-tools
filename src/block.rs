@@ -162,28 +162,16 @@ impl Block {
 ///
 /// Gibt die Gesamtzahl übersprungener Bytes zurück
 /// (inklusive Längen-Varint selbst).
+// Gibt die Position NACH dem Block zurück
 pub fn skip_block<R: Read + Seek>(reader: &mut R) -> Result<u64, OmniError> {
-    let _start = reader.stream_position()?;
     let (data_len, len_bytes) = read_varint(reader)?;
-    reader.seek(SeekFrom::Current(data_len as i64))?;
-    Ok(len_bytes as u64 + data_len)
+    let new_pos = reader.seek(SeekFrom::Current(data_len as i64))?;
+    Ok(new_pos)
 }
 
 /// Liest nur den Header, überspringt den Payload.
 /// Nützlich um Blöcke zu inventarisieren ohne sie vollständig zu laden.
-pub fn read_header_skip_payload<R: Read + Seek>(
-    reader: &mut R,
-) -> Result<BlockHeader, OmniError> {
-    let (data_len, _) = read_varint(reader)?;
-
-    // Typ lesen (variable Länge, daher kurz in Puffer)
-    // Wir lesen data_len Bytes, dekodieren nur den Typ
-    let mut data = vec![0u8; data_len as usize];
-    reader.read_exact(&mut data)?;
-    let (block_type, _) = BlockType::decode(&data)?;
-
-    Ok(BlockHeader { data_len, block_type })
-}
+read_header_skip_payload
 
 /// Schreibt die Magic Number an den Anfang.
 pub fn write_magic<W: Write>(writer: &mut W) -> Result<(), OmniError> {
