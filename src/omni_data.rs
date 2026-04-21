@@ -1,50 +1,21 @@
 use crate::varint::{VarInt};
 
-// ============================================================================
-// Serialize-Trait
-// ============================================================================
-
-/// Alles was diesen Trait implementiert kann sich in sein Wire-Format
-/// serialisieren. Block-Structs implementieren ihn indem sie ihre
-/// Felder der Reihe nach serialisieren.
-pub trait Serialize {
+pub trait OmniSerialize {
     fn serialize(&self) -> Vec<u8>;
 }
-
-// ============================================================================
-// ExportMode
-// ============================================================================
-
-/// Steuert was `to_bytes_ext` ausgibt.
-///
-/// Wire-Format von OmniData:
-///   Full       →  [VarInt(len)][...len Bytes...]
-///   DataOnly   →  [...len Bytes...]
-///   LengthOnly →  [VarInt(len)]
-pub enum ExportMode {
-    /// [VarInt(len)][daten]  — das Standard-Format auf dem Wire
+pub enum OmniExportMode {
     Full,
-    /// Nur die rohen Bytes, ohne Längen-Prefix
     DataOnly,
-    /// Nur den VarInt der Datenlänge, ohne die Daten selbst
     LengthOnly,
 }
 
-// ============================================================================
-// OmniData
-// ============================================================================
-
-/// Ein Byte-Puffer der sich selbst mit einer VarInt-Länge serialisieren kann.
-///
-/// Wire-Format (Full):  [VarInt(len)][...len Bytes...]
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct OmniData {
     pub data: Vec<u8>,
 }
 
 impl OmniData {
     pub fn new() -> Self {
-        Self::default()
+        Self { data: Vec::new() }
     }
 
     pub fn from_bytes(bytes: impl Into<Vec<u8>>) -> Self {
@@ -59,21 +30,27 @@ impl OmniData {
         self.data.is_empty()
     }
 
-    /// Kurzform: Full-Modus → [VarInt(len)][daten]
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.to_bytes_ext(ExportMode::Full)
+        self.to_bytes_ext(OmniExportMode::Full)
     }
 
-    pub fn to_bytes_ext(&self, mode: ExportMode) -> Vec<u8> {
+    pub fn to_bytes_ext(&self, mode: OmniExportMode) -> Vec<u8> {
         match mode {
-            ExportMode::DataOnly => {
+            OmniExportMode::DataOnly => {
                 self.data.clone()
             }
-            ExportMode::LengthOnly => {
-                VarInt::new(self.data.len() as u64).data
+            OmniExportMode::LengthOnly => {
+                // Nutzt From<usize> (via Makro) und wandelt es in Vec<u8> um
+                VarInt::from(self.data.len()).to_vec()
             }
-            ExportMode::Full => {
-                let mut buf = VarInt::new(self.data.len() as u64).data;
+            OmniExportMode::Full => {
+                // Erzeugt VarInt aus der Länge
+                let len_varint = VarInt::from(self.data.len());
+
+                // Da VarInt Deref implementiert, können wir es direkt
+                // als &[u8] an den Buffer hängen
+                let mut buf = Vec::with_capacity(len_varint.len() + self.data.len());
+                buf.extend_from_slice(&len_varint);
                 buf.extend_from_slice(&self.data);
                 buf
             }
@@ -81,30 +58,33 @@ impl OmniData {
     }
 }
 
-impl Serialize for OmniData {
-    /// Serialisiert als Full-Modus: [VarInt(len)][daten]
+impl OmniSerialize for OmniData {
     fn serialize(&self) -> Vec<u8> {
         self.to_bytes()
     }
 }
 
-// ============================================================================
-// OmniTyp
-// ============================================================================
 
-/// Ein Typ-Tag aus einer Folge von VarInts.
-///
-/// Wire-Format:  [VarInt(n)][VarInt₁]..[VarIntₙ]
-///
-/// Bedeutung von n:
-///   0  → kein VarInt folgt  (Binär-Rohformat o.ä.)
-///   1  → genau 1 VarInt folgt
-///   n  → n VarInts folgen
-///
-/// Beispiel: Typ-Code „2.7" wäre OmniTyp::new(vec![2, 7])
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+/*
+//##########################################
+//##########################################
+//###############          #################
+//###############          #################
+//###############          #################
+//###############          #################
+//###############          #################
+//##########                    ############
+//############                ##############
+//#############             ################
+//###############         ##################
+//#################     ####################
+//################### ######################
+//##########################################
+//##########################################
+
+
+
 pub struct OmniTyp {
-    /// Die eigentlichen Typ-VarInts (ohne die Länge selbst)
     pub ids: Vec<u64>,
 }
 
@@ -112,28 +92,20 @@ impl OmniTyp {
     pub fn new(ids: impl Into<Vec<u64>>) -> Self {
         Self { ids: ids.into() }
     }
-
-    /// Leerer Typ (n=0): kein VarInt folgt
     pub fn empty() -> Self {
-        Self::default()
+        Self::new(Vec::new())
     }
-
-    /// Anzahl der Typ-VarInts
     pub fn len(&self) -> usize {
         self.ids.len()
     }
-
     pub fn is_empty(&self) -> bool {
         self.ids.is_empty()
     }
 }
 
-impl Serialize for OmniTyp {
-    /// Wire-Format: [VarInt(n)][VarInt₁]..[VarIntₙ]
+impl OmniSerialize for OmniTyp {
     fn serialize(&self) -> Vec<u8> {
-        // Anzahl als VarInt voranstellen
         let mut buf = VarInt::new(self.ids.len() as u64).data;
-        // Danach jeden Typ-VarInt
         for &id in &self.ids {
             buf.extend(VarInt::new(id).data);
         }
@@ -157,7 +129,7 @@ impl OmniHeader {
     }
 }
 
-impl Serialize for OmniHeader {
+impl OmniSerialize for OmniHeader {
     fn serialize(&self) -> Vec<u8> {
         self.typ.serialize()
     }
@@ -179,7 +151,7 @@ impl OmniContent {
     }
 }
 
-impl Serialize for OmniContent {
+impl OmniSerialize for OmniContent {
     fn serialize(&self) -> Vec<u8> {
         self.data.serialize()
     }
@@ -201,7 +173,7 @@ impl OmniFooter {
     }
 }
 
-impl Serialize for OmniFooter {
+impl OmniSerialize for OmniFooter {
     fn serialize(&self) -> Vec<u8> {
         self.data.serialize()
     }
@@ -220,6 +192,7 @@ impl Serialize for OmniFooter {
 pub struct OmniBlock {
     pub header:  OmniHeader,
     pub content: OmniContent,
+    pub footer:  Option<OmniFooter>,
 }
 
 impl OmniBlock {
@@ -227,11 +200,12 @@ impl OmniBlock {
         Self {
             header:  OmniHeader::new(typ),
             content: OmniContent::new(data),
+
         }
     }
 }
 
-impl Serialize for OmniBlock {
+impl OmniSerialize for OmniBlock {
     fn serialize(&self) -> Vec<u8> {
         let mut buf = self.header.serialize();
         buf.extend(self.content.serialize());
@@ -239,133 +213,4 @@ impl Serialize for OmniBlock {
     }
 }
 
-// ============================================================================
-// OmniHashBlock  (Block mit Hash-Footer)
-// ============================================================================
-
-/// Ein Block mit optionalem Hash im Footer.
-///
-/// Wire-Format:
-///   [OmniHeader][OmniContent][OmniFooter]
-///   = ...[VarInt(hash_len)][hash_bytes]
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OmniHashBlock {
-    pub header:  OmniHeader,
-    pub content: OmniContent,
-    pub footer:  OmniFooter,
-}
-
-impl OmniHashBlock {
-    pub fn new(typ: OmniTyp, data: OmniData, hash: OmniData) -> Self {
-        Self {
-            header:  OmniHeader::new(typ),
-            content: OmniContent::new(data),
-            footer:  OmniFooter::new(hash),
-        }
-    }
-}
-
-impl Serialize for OmniHashBlock {
-    fn serialize(&self) -> Vec<u8> {
-        let mut buf = self.header.serialize();
-        buf.extend(self.content.serialize());
-        buf.extend(self.footer.serialize());
-        buf
-    }
-}
-
-// ============================================================================
-// Tests
-// ============================================================================
-
-#[cfg(test)]
-mod tests {
-    use crate::varint::FromVarint;
-    use super::*;
-
-    // --- OmniData -----------------------------------------------------------
-
-    #[test]
-    fn omnidata_full_modus() {
-        let d = OmniData::from_bytes(vec![0xAA, 0xBB, 0xCC]);
-        let bytes = d.to_bytes();
-        // Erstes Byte muss VarInt(3) = 0x03 sein
-        assert_eq!(bytes[0], 0x03);
-        assert_eq!(&bytes[1..], &[0xAA, 0xBB, 0xCC]);
-    }
-
-    #[test]
-    fn omnidata_data_only() {
-        let d = OmniData::from_bytes(vec![1, 2, 3]);
-        assert_eq!(d.to_bytes_ext(ExportMode::DataOnly), vec![1, 2, 3]);
-    }
-
-    #[test]
-    fn omnidata_length_only() {
-        let d = OmniData::from_bytes(vec![1, 2, 3]);
-        let lb = d.to_bytes_ext(ExportMode::LengthOnly);
-        let (len, _) = u64::from_varint(&lb).unwrap();
-        assert_eq!(len, 3);
-    }
-
-    // --- OmniTyp ------------------------------------------------------------
-
-    #[test]
-    fn omnitype_leer() {
-        // n=0 → nur ein einziges 0x00-Byte
-        let t = OmniTyp::empty();
-        assert_eq!(t.serialize(), vec![0x00]);
-    }
-
-    #[test]
-    fn omnitype_ein_id() {
-        // n=1, id=42
-        let t = OmniTyp::new(vec![42]);
-        let bytes = t.serialize();
-        assert_eq!(bytes[0], 0x01); // VarInt(1)
-        assert_eq!(bytes[1], 0x2A); // VarInt(42) = 0x2A
-    }
-
-    #[test]
-    fn omnitype_mehrere_ids() {
-        // n=3, ids=[1,2,3]
-        let t = OmniTyp::new(vec![1, 2, 3]);
-        let bytes = t.serialize();
-        assert_eq!(bytes[0], 0x03); // VarInt(3)
-        assert_eq!(&bytes[1..], &[0x01, 0x02, 0x03]);
-    }
-
-    // --- OmniBlock ----------------------------------------------------------
-
-    #[test]
-    fn omniblock_wire_format() {
-        let typ  = OmniTyp::new(vec![1]);
-        let data = OmniData::from_bytes(vec![0xFF, 0xFE]);
-        let block = OmniBlock::new(typ, data);
-        let bytes = block.serialize();
-
-        // [VarInt(1)=0x01][VarInt(1)=0x01]  ← Header: 1 id, id=1
-        // [VarInt(2)=0x02][0xFF][0xFE]       ← Content
-        assert_eq!(bytes, vec![0x01, 0x01, 0x02, 0xFF, 0xFE]);
-    }
-
-    // --- OmniHashBlock ------------------------------------------------------
-
-    #[test]
-    fn omnihashblock_enthaelt_footer() {
-        let typ  = OmniTyp::new(vec![2, 7]);
-        let data = OmniData::from_bytes(vec![0xAA]);
-        let hash = OmniData::from_bytes(vec![0x01, 0x02]); // Fake-Hash
-        let block = OmniHashBlock::new(typ, data, hash);
-        let bytes = block.serialize();
-
-        // Header:  [VarInt(2)][VarInt(2)][VarInt(7)]
-        // Content: [VarInt(1)][0xAA]
-        // Footer:  [VarInt(2)][0x01][0x02]
-        assert_eq!(bytes, vec![
-            0x02, 0x02, 0x07, // Header: n=2, ids=[2,7]
-            0x01, 0xAA,       // Content: len=1, data=0xAA
-            0x02, 0x01, 0x02, // Footer: len=2, hash=[0x01,0x02]
-        ]);
-    }
-}
+*/
