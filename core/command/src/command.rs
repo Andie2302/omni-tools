@@ -19,13 +19,12 @@ impl<'a> Command<'a> {
         }
     }
 
-    /// Berechnet die exakte Gesamtlänge für die Pufferallokation.
+    /// Berechnet die exakte Zeichenlänge des fertigen Kommandos (Pfad + Abstand + Argumente).
     pub fn len(&self) -> usize {
         if self.arguments.is_empty() {
             self.path.len()
         } else {
-            // Pfadlänge + 1 (Leerzeichen) + Länge der gerenderten Argumente
-            self.path.len() + 1 + self.arguments.render().len()
+            self.path.len() + 1 + self.arguments.rendered_len()
         }
     }
 
@@ -33,11 +32,10 @@ impl<'a> Command<'a> {
         self.path.is_empty()
     }
 
-    /// Rendert das gesamte Kommando inkl. Pfad und Argumenten in einen String.
+    #[cfg(feature = "alloc")]
     pub fn render(&self) -> String {
         let mut result = String::with_capacity(self.len());
 
-        // Pfad direkt in den String schreiben
         result.push_str(self.path);
 
         if !self.arguments.is_empty() {
