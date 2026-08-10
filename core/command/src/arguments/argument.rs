@@ -134,3 +134,16 @@ impl<'a> fmt::Display for Argument<'a> {
         Ok(())
     }
 }
+
+impl<'a> From<&'a str> for Argument<'a> {
+    fn from(s: &'a str) -> Self {
+        Self {
+            prefix: None,
+            key: DelimitedString::from(s), // Oder: DelimitedString::plain(s)
+            separator: None,
+            value: None,
+            postfix: None,
+            delimiter: None,
+        }
+    }
+}
