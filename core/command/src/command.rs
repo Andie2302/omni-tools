@@ -1,6 +1,9 @@
 use core::fmt;
 use crate::arguments::Arguments;
 
+#[cfg(feature = "alloc")]
+use alloc::string::String;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Command<'a> {
     pub path: &'a str,
@@ -19,11 +22,12 @@ impl<'a> Command<'a> {
         }
     }
 
-    /// Berechnet die exakte Zeichenlänge des fertigen Kommandos (Pfad + Abstand + Argumente).
+    /// Berechnet die exakte Zeichenlänge des fertigen Kommandos (Pfad + Leerzeichen + Argumente).
     pub fn len(&self) -> usize {
         if self.arguments.is_empty() {
             self.path.len()
         } else {
+            // Nutzt rendered_len() statt render().len() -> Keine Allokation & exakte Länge!
             self.path.len() + 1 + self.arguments.rendered_len()
         }
     }
