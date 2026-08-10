@@ -1,8 +1,8 @@
-use core::fmt;
-use crate::delimited_string::{DelimitedString, Delimiter};
 use crate::arguments::argument_builder::ArgumentBuilder;
+use crate::arguments::delimited_string::{DelimitedString, Delimiter};
+use core::fmt;
 
-use alloc::{string::{String,ToString}, vec::Vec};
+use alloc::{string::{String, ToString}, vec::Vec};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Argument<'a> {
