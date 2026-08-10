@@ -11,4 +11,4 @@ alloc = []
 std = ["alloc"]
 
 [dependencies]
-command = {path = "../../core/command"}
+command = {path = "../../core/command", features = ["std"]}
