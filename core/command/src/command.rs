@@ -1,7 +1,4 @@
-use core::fmt;
-use crate::arguments::Arguments;
 
-#[cfg(feature = "alloc")]
 use alloc::string::String;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
