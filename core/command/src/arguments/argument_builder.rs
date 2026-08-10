@@ -1,4 +1,4 @@
-use crate::argument::Argument;
+use crate::arguments::argument::Argument;
 use crate::delimited_string::{DelimitedString, Delimiter};
 
 #[derive(Debug, Default)]
