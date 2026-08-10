@@ -1,5 +1,6 @@
-use crate::arguments::argument::Argument;
 use alloc::string::String;
+use core::fmt;
+use crate::arguments::arguments::Arguments;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Command<'a> {
