@@ -1,9 +1,16 @@
-/*
+use std::process::Command;
 
-use command::argument::Argument;
-use command::arguments::Arguments;
-use command::command::{CommandExecutor, ExecutionMode, PrivilegeLevel};
-use command::delimiter::DelimiterString;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PrivilegeLevel {
+    User,
+    Sudo,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutionMode {
+    Quiet,
+    Interactive,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FlatpakScope {
@@ -45,40 +52,85 @@ impl FlatpakManager {
     }
 
     fn apply_scope_arg(&self, args: &mut Arguments) {
-        match self.scope {
-            FlatpakScope::User => args.push(Argument::flag("user", "--")),
-            FlatpakScope::System => args.push(Argument::flag("system", "--")),
+        let flag = match self.scope {
+            FlatpakScope::User => "user",
+            FlatpakScope::System => "system",
+        };
+
+        args.push(
+            Argument::builder()
+                .prefix("--")
+                .key(flag)
+                .build()
+                .expect("Valid scope argument"),
+        );
+    }
+
+    /// Hilfsmethode zur Ausführung der erstellten `Command`-Instanz über `std::process::Command`
+    fn execute(
+        cmd: Command<'_>,
+        privilege: PrivilegeLevel,
+        mode: ExecutionMode,
+    ) -> Result<String, String> {
+        let mut sys_cmd = match privilege {
+            PrivilegeLevel::User => cmd.to_exec_cmd(),
+            PrivilegeLevel::Sudo => {
+                let mut sudo = ProcessCommand::new("sudo");
+                sudo.arg(cmd.path);
+                sudo.args(cmd.to_args());
+                sudo
+            }
+        };
+
+        match mode {
+            ExecutionMode::Interactive => {
+                let status = sys_cmd
+                    .status()
+                    .map_err(|e| format!("Fehler beim Starten des Befehls: {}", e))?;
+
+                if status.success() {
+                    Ok(String::new())
+                } else {
+                    Err(format!("Prozess beendet mit Status: {}", status))
+                }
+            }
+            ExecutionMode::Quiet => {
+                let output = sys_cmd
+                    .stdout(Stdio::piped())
+                    .stderr(Stdio::piped())
+                    .output()
+                    .map_err(|e| format!("Fehler beim Ausführen des Befehls: {}", e))?;
+
+                if output.status.success() {
+                    String::from_utf8(output.stdout)
+                        .map_err(|e| format!("Ungültige UTF-8 Ausgabe: {}", e))
+                } else {
+                    let stderr = String::from_utf8_lossy(&output.stderr);
+                    Err(stderr.trim().to_string())
+                }
+            }
         }
     }
 
     pub fn install(&self, app_id: &str, non_interactive: bool) -> Result<String, String> {
-        let mut args = Arguments::new(" ");
-        args.push(Argument::new(
-            DelimiterString::new("install", None, None),
-            None,
-            None,
-            None,
-        ));
+        let mut args = Arguments::new();
 
+        args.push(Argument::builder().key("install").build().unwrap());
         self.apply_scope_arg(&mut args);
 
         if non_interactive {
-            args.push(Argument::flag("noninteractive", "--"));
-            args.push(Argument::flag("y", "-"));
+            args.push(
+                Argument::builder()
+                    .prefix("--")
+                    .key("noninteractive")
+                    .build()
+                    .unwrap(),
+            );
+            args.push(Argument::builder().prefix("-").key("y").build().unwrap());
         }
 
-        args.push(Argument::new(
-            DelimiterString::new(&self.remote, None, None),
-            None,
-            None,
-            None,
-        ));
-        args.push(Argument::new(
-            DelimiterString::new(app_id, None, None),
-            None,
-            None,
-            None,
-        ));
+        args.push(Argument::builder().key(&self.remote[..]).build().unwrap());
+        args.push(Argument::builder().key(app_id).build().unwrap());
 
         let mode = if non_interactive {
             ExecutionMode::Quiet
@@ -86,52 +138,41 @@ impl FlatpakManager {
             ExecutionMode::Interactive
         };
 
-        CommandExecutor::execute("flatpak", &args, self.privilege(), mode)
+        let cmd = Command::new("flatpak", args);
+        Self::execute(cmd, self.privilege(), mode)
     }
 
     pub fn is_installed(&self, app_id: &str) -> bool {
-        let mut args = Arguments::new(" ");
-        args.push(Argument::new(
-            DelimiterString::new("info", None, None),
-            None,
-            None,
-            None,
-        ));
+        let mut args = Arguments::new();
 
+        args.push(Argument::builder().key("info").build().unwrap());
         self.apply_scope_arg(&mut args);
+        args.push(Argument::builder().key(app_id).build().unwrap());
 
-        args.push(Argument::new(
-            DelimiterString::new(app_id, None, None),
-            None,
-            None,
-            None,
-        ));
-
-        CommandExecutor::execute("flatpak", &args, self.privilege(), ExecutionMode::Quiet).is_ok()
+        let cmd = Command::new("flatpak", args);
+        Self::execute(cmd, self.privilege(), ExecutionMode::Quiet).is_ok()
     }
 
-    /// Listet installierte Apps auf und parst sie in eine Struktur
     pub fn list_apps(&self) -> Result<Vec<FlatpakApp>, String> {
-        let mut args = Arguments::new(" ");
-        args.push(Argument::new(
-            DelimiterString::new("list", None, None),
-            None,
-            None,
-            None,
-        ));
+        let mut args = Arguments::new();
 
+        args.push(Argument::builder().key("list").build().unwrap());
         self.apply_scope_arg(&mut args);
-        args.push(Argument::flag("app", "--"));
-        // Spalten-Format vorgeben für einfaches Tab-Parsing
-        args.push(Argument::key_value(
-            "columns",
-            "--",
-            "=",
-            "name,application,version,branch",
-        ));
+        args.push(Argument::builder().prefix("--").key("app").build().unwrap());
 
-        let raw_output =
-            CommandExecutor::execute("flatpak", &args, self.privilege(), ExecutionMode::Quiet)?;
+        // Spalten-Format vorgeben für einfaches Tab-Parsing
+        args.push(
+            Argument::builder()
+                .prefix("--")
+                .key("columns")
+                .separator("=")
+                .value("name,application,version,branch")
+                .build()
+                .unwrap(),
+        );
+
+        let cmd = Command::new("flatpak", args);
+        let raw_output = Self::execute(cmd, self.privilege(), ExecutionMode::Quiet)?;
 
         let mut apps = Vec::new();
         for line in raw_output.lines() {
@@ -150,25 +191,14 @@ impl FlatpakManager {
     }
 
     pub fn uninstall(&self, app_id: &str) -> Result<String, String> {
-        let mut args = Arguments::new(" ");
-        args.push(Argument::new(
-            DelimiterString::new("uninstall", None, None),
-            None,
-            None,
-            None,
-        ));
+        let mut args = Arguments::new();
 
+        args.push(Argument::builder().key("uninstall").build().unwrap());
         self.apply_scope_arg(&mut args);
-        args.push(Argument::flag("y", "-"));
-        args.push(Argument::new(
-            DelimiterString::new(app_id, None, None),
-            None,
-            None,
-            None,
-        ));
+        args.push(Argument::builder().prefix("-").key("y").build().unwrap());
+        args.push(Argument::builder().key(app_id).build().unwrap());
 
-        CommandExecutor::execute("flatpak", &args, self.privilege(), ExecutionMode::Quiet)
+        let cmd = Command::new("flatpak", args);
+        Self::execute(cmd, self.privilege(), ExecutionMode::Quiet)
     }
-}   
-
-// */
+}
