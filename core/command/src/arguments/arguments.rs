@@ -135,3 +135,25 @@ impl<'a> fmt::Display for Arguments<'a> {
         Ok(())
     }
 }
+
+// In: arguments.rs
+
+// Erlaubt: for arg in arguments
+impl<'a> IntoIterator for Arguments<'a> {
+    type Item = Argument<'a>;
+    type IntoIter = alloc::vec::IntoIter<Argument<'a>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.items.into_iter()
+    }
+}
+
+// Erlaubt: for arg in &arguments
+impl<'a, 'b> IntoIterator for &'b Arguments<'a> {
+    type Item = &'b Argument<'a>;
+    type IntoIter = core::slice::Iter<'b, Argument<'a>>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.items.iter()
+    }
+}
