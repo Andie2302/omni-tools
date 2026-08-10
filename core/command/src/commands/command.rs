@@ -75,6 +75,7 @@ impl<'a> fmt::Display for Command<'a> {
     }
 }
 
+
 // -----------------------------------------------------------------------------
 // std-Konvertierung (geschützt über cfg(feature = "std"))
 // -----------------------------------------------------------------------------
@@ -88,18 +89,8 @@ impl<'a> From<Command<'a>> for std::process::Command {
             std_cmd.current_dir(dir);
         }
 
-        // Falls Arguments<'a> das `IntoIterator<Item = &str>`-Interface implementiert:
-        std_cmd.args(cmd.arguments);
-
-        /*
-        // ALTERNATIVE: Falls Arguments kein Iterator ist, aber z. B. `iter()` oder Slices bietet:
-        // std_cmd.args(cmd.arguments.as_slice());
-        //
-        // ODER falls Arguments nur ein Display/Render-Feature hat:
-        // if !cmd.arguments.is_empty() {
-        //     std_cmd.arg(cmd.arguments.to_string());
-        // }
-        */
+        // Wandelt deine Argumente sauber in Tokens um (&str / String)
+        std_cmd.args(cmd.arguments.to_args());
 
         std_cmd
     }
@@ -114,8 +105,7 @@ impl<'a> From<&Command<'a>> for std::process::Command {
             std_cmd.current_dir(dir);
         }
 
-        // Falls &Arguments<'a> iterierbar über &str ist:
-        std_cmd.args(&cmd.arguments);
+        std_cmd.args(cmd.arguments.to_args());
 
         std_cmd
     }
