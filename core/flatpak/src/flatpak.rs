@@ -1,3 +1,5 @@
+/*
+use std::fmt::Arguments;
 use std::process::Command;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -202,3 +204,4 @@ impl FlatpakManager {
         Self::execute(cmd, self.privilege(), ExecutionMode::Quiet)
     }
 }
+// */
