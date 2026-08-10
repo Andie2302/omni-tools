@@ -2,6 +2,9 @@ use crate::argument::Argument;
 use crate::delimited_string::Delimiter;
 use core::fmt;
 
+#[cfg(feature = "alloc")]
+use alloc::{string::String, vec::Vec};
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Arguments<'a> {
     items: Vec<Argument<'a>>,
@@ -32,29 +35,24 @@ impl<'a> Arguments<'a> {
         }
     }
 
-    /// Ändert den Separator für die Ausgabe aller Items (Fluent API).
     pub fn with_item_separator(mut self, separator: &'a str) -> Self {
         self.item_separator = separator;
         self
     }
 
-    /// Setzt den Separator nachträglich.
     pub fn set_item_separator(&mut self, separator: &'a str) {
         self.item_separator = separator;
     }
 
-    /// Setzt individuelle Start- und End-Begrenzer um die gesamte Argumentenliste (Fluent API).
     pub fn with_delimiter(mut self, start: &'a str, end: &'a str) -> Self {
         self.delimiter = Some(Delimiter::new(Some(start), Some(end)));
         self
     }
 
-    /// Fügt ein Argument zur Liste hinzu.
     pub fn push(&mut self, arg: Argument<'a>) {
         self.items.push(arg);
     }
 
-    /// Gibt die Anzahl der Argument-Einträge zurück.
     pub fn count(&self) -> usize {
         self.items.len()
     }
@@ -63,15 +61,22 @@ impl<'a> Arguments<'a> {
         self.items.is_empty()
     }
 
-    // --- Dynamische Längenberechnung & Rendering ---
+    /// Iterator über die Argumente
+    pub fn iter(&self) -> core::slice::Iter<'_, Argument<'a>> {
+        self.items.iter()
+    }
 
-    /// Berechnet die exakte String-Länge der gerenderten Argumentenliste ohne Allokation.
+    /// Wandelt alle Argumente in ein flaches `Vec<String>` ohne Quotes um
+    #[cfg(feature = "alloc")]
+    pub fn to_args(&self) -> Vec<String> {
+        self.items.iter().flat_map(|arg| arg.to_arg_tokens()).collect()
+    }
+
     pub fn rendered_len(&self) -> usize {
         if self.items.is_empty() {
             return self.delimiter.map_or(0, |d| d.len());
         }
 
-        // 1. Länge aller Einzel-Argumente aufsummieren
         let args_len: usize = self
             .items
             .iter()
@@ -88,10 +93,7 @@ impl<'a> Arguments<'a> {
             })
             .sum();
 
-        // 2. Gesamtlänge der Item-Separatoren dazwischen berechnen
         let separators_len = (self.items.len() - 1) * self.item_separator.len();
-
-        // 3. Länge des äußeren Delimiters hinzurechnen
         let outer_delimiter_len = self.delimiter.map_or(0, |d| d.len());
 
         args_len + separators_len + outer_delimiter_len
@@ -111,18 +113,14 @@ impl<'a> Arguments<'a> {
     }
 }
 
-// --- Display mit Delimiter & item_separator ---
-
 impl<'a> fmt::Display for Arguments<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // 1. Äußeren Delimiter-Start schreiben (falls vorhanden)
         if let Some(ref d) = self.delimiter {
             if let Some(start) = d.start {
                 f.write_str(start)?;
             }
         }
 
-        // 2. Alle Items getrennt durch item_separator schreiben
         for (i, arg) in self.items.iter().enumerate() {
             if i > 0 {
                 f.write_str(self.item_separator)?;
@@ -130,7 +128,6 @@ impl<'a> fmt::Display for Arguments<'a> {
             write!(f, "{}", arg)?;
         }
 
-        // 3. Äußeren Delimiter-End schreiben (falls vorhanden)
         if let Some(ref d) = self.delimiter {
             if let Some(end) = d.end {
                 f.write_str(end)?;
