@@ -1,7 +1,6 @@
 use crate::arguments::argument::Argument;
 use alloc::string::String;
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Command<'a> {
     pub path: &'a str,
