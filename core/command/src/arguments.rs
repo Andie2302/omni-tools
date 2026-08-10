@@ -54,7 +54,8 @@ impl<'a> Arguments<'a> {
         self.items.push(arg);
     }
 
-    pub fn len(&self) -> usize {
+    /// Gibt die Anzahl der Argument-Einträge zurück.
+    pub fn count(&self) -> usize {
         self.items.len()
     }
 
@@ -64,17 +65,10 @@ impl<'a> Arguments<'a> {
 
     // --- Dynamische Längenberechnung & Rendering ---
 
-    pub fn render(&self) -> String {
+    /// Berechnet die exakte String-Länge der gerenderten Argumentenliste ohne Allokation.
+    pub fn rendered_len(&self) -> usize {
         if self.items.is_empty() {
-            // Selbst wenn keine Items da sind, muss die Länge des Delimiters berücksichtigt werden
-            let delimiter_len = self.delimiter.map_or(0, |d| d.len());
-            if delimiter_len == 0 {
-                return String::new();
-            }
-            let mut result = String::with_capacity(delimiter_len);
-            use std::fmt::Write;
-            let _ = write!(result, "{}", self);
-            return result;
+            return self.delimiter.map_or(0, |d| d.len());
         }
 
         // 1. Länge aller Einzel-Argumente aufsummieren
@@ -100,10 +94,18 @@ impl<'a> Arguments<'a> {
         // 3. Länge des äußeren Delimiters hinzurechnen
         let outer_delimiter_len = self.delimiter.map_or(0, |d| d.len());
 
-        let total_len = args_len + separators_len + outer_delimiter_len;
+        args_len + separators_len + outer_delimiter_len
+    }
+
+    #[cfg(feature = "alloc")]
+    pub fn render(&self) -> String {
+        let total_len = self.rendered_len();
+        if total_len == 0 {
+            return String::new();
+        }
 
         let mut result = String::with_capacity(total_len);
-        use std::fmt::Write;
+        use core::fmt::Write;
         let _ = write!(result, "{}", self);
         result
     }
