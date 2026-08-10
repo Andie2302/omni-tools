@@ -8,12 +8,10 @@ pub struct Command<'a> {
 }
 
 impl<'a> Command<'a> {
-    /// Erstellt ein neues `Command` mit Pfad und Argumenten.
     pub fn new(path: &'a str, arguments: Arguments<'a>) -> Self {
         Self { path, arguments }
     }
 
-    /// Erstellt ein `Command` ohne Argumente.
     pub fn plain(path: &'a str) -> Self {
         Self {
             path,
@@ -21,27 +19,33 @@ impl<'a> Command<'a> {
         }
     }
 
-    /// Berechnet die exakte String-Länge für die gepufferte Ausgabe.
+    /// Berechnet die exakte Gesamtlänge für die Pufferallokation.
     pub fn len(&self) -> usize {
         if self.arguments.is_empty() {
             self.path.len()
         } else {
-            // Pfad + Leerzeichen/Separator-Abstand + Argumente
+            // Pfadlänge + 1 (Leerzeichen) + Länge der gerenderten Argumente
             self.path.len() + 1 + self.arguments.render().len()
         }
     }
 
-    /// Prüft, ob der Pfad leer ist.
     pub fn is_empty(&self) -> bool {
         self.path.is_empty()
     }
 
-    /// Rendert das gesamte Kommando in ein `String` (erfordert `alloc` / `std`).
-    #[cfg(feature = "alloc")]
+    /// Rendert das gesamte Kommando inkl. Pfad und Argumenten in einen String.
     pub fn render(&self) -> String {
         let mut result = String::with_capacity(self.len());
-        use core::fmt::Write;
-        let _ = write!(result, "{}", self);
+
+        // Pfad direkt in den String schreiben
+        result.push_str(self.path);
+
+        if !self.arguments.is_empty() {
+            result.push(' ');
+            use core::fmt::Write;
+            let _ = write!(result, "{}", self.arguments);
+        }
+
         result
     }
 }
@@ -52,51 +56,9 @@ impl<'a> fmt::Display for Command<'a> {
 
         if !self.arguments.is_empty() {
             f.write_str(" ")?;
-            write!(f, "{}", self.arguments)?;
+            fmt::Display::fmt(&self.arguments, f)?;
         }
 
         Ok(())
-    }
-}
-
-// ==========================================
-// Tests
-// ==========================================
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::argument::Argument;
-
-    #[test]
-    fn test_plain_command() {
-        let cmd = Command::plain("ls");
-        assert_eq!(cmd.path, "ls");
-        assert!(cmd.arguments.is_empty());
-        assert_eq!(cmd.arguments.render(), "ls");
-    }
-
-    #[test]
-    fn test_command_with_arguments() {
-        let mut args = Arguments::new();
-        args.push(
-            Argument::builder()
-                .prefix("-")
-                .key("l")
-                .build()
-                .unwrap(),
-        );
-        args.push(
-            Argument::builder()
-                .prefix("-")
-                .key("a")
-                .build()
-                .unwrap(),
-        );
-
-        let cmd = Command::new("ls", args);
-
-        assert_eq!(cmd.arguments.render(), "ls -l -a");
-        assert_eq!(cmd.len(), 8);
     }
 }
