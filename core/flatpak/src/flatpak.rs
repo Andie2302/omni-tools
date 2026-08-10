@@ -1,3 +1,5 @@
+/*
+
 use command::argument::Argument;
 use command::arguments::Arguments;
 use command::command::{CommandExecutor, ExecutionMode, PrivilegeLevel};
@@ -167,4 +169,6 @@ impl FlatpakManager {
 
         CommandExecutor::execute("flatpak", &args, self.privilege(), ExecutionMode::Quiet)
     }
-}
+}   
+
+// */
