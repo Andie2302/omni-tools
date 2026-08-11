@@ -1,4 +1,3 @@
-#![forbid(unsafe_code)]
-
 pub mod flatpak;
-pub mod flatpak_list;
+pub mod flatpak_install_test;
+pub mod flatpak_install;
