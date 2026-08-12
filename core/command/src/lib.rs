@@ -8,3 +8,6 @@ pub mod base;
 pub mod command;
 
 pub use base::*;
+
+#[cfg(all(feature = "std", feature = "alloc"))]
+pub use command::{Command, CurrentDirectoryPath, ExecutablePath};
