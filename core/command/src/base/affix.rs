@@ -29,6 +29,15 @@ impl<'a> AffixedString<'a> {
         self.affix_pair.postfix = affix;
         self
     }
+    pub fn with_prefix(mut self, prefix: &'a str) -> Self {
+        self.affix_pair.prefix = prefix;
+        self
+    }
+    pub fn with_postfix(mut self, postfix: &'a str) -> Self {
+        self.affix_pair.postfix = postfix;
+        self
+    }
+
 
     /// Setzt Prefix und Postfix getrennt.
     pub fn with_separate_affix(mut self, prefix: &'a str, postfix: &'a str) -> Self {
