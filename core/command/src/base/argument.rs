@@ -6,7 +6,24 @@ use core::fmt::{self, Display, Formatter};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Formatting<'a> {
     pub affix: AffixPair<'a>,
+    /// Trenner zwischen Key und Value beim Rendern eines `Argument`.
+    ///
+    /// ACHTUNG: `Formatting::default()` liefert `separator = ""`.
+    /// Für `--key=value` also explizit `with_separator("=")` setzen,
+    /// sonst entsteht `--keyvalue` ohne Trennzeichen.
     pub separator: &'a str,
+}
+
+impl<'a> Formatting<'a> {
+    pub fn with_separator(mut self, separator: &'a str) -> Self {
+        self.separator = separator;
+        self
+    }
+
+    pub fn with_affix(mut self, affix: AffixPair<'a>) -> Self {
+        self.affix = affix;
+        self
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
